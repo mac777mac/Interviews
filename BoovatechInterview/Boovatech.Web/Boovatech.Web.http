@@ -1,0 +1,6 @@
+@Boovatech.Web_HostAddress = http://localhost:5014
+
+GET {{Boovatech.Web_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
