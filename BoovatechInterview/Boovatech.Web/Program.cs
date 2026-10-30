@@ -17,6 +17,7 @@ namespace Boovatech.Web
             builder.Services.AddSwaggerGen();
 
             builder.Services.AddHostedService<MessagesProcessingService>();
+            builder.Services.AddHostedService<SuspendedEvetnsPumpingService>();
 
             var app = builder.Build();
 
