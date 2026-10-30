@@ -10,12 +10,10 @@ namespace Boovatech.Eventing
     public class DomainEventsService: IDomainEventService
     {
         private readonly IAccountsRespository accountsRespository;
-        private readonly ISuspendedEventPublisher eventPublisher;
 
-        public DomainEventsService(IAccountsRespository accountsRespository, ISuspendedEventPublisher eventPublisher)
+        public DomainEventsService(IAccountsRespository accountsRespository)
         {
             this.accountsRespository = accountsRespository;
-            this.eventPublisher = eventPublisher;
         }
         public async Task<EventProcessingStatus> HandleDomainEventAsync(DomainEvent @event, IDomainTransaction trx)
         {
@@ -31,17 +29,7 @@ namespace Boovatech.Eventing
 
             await accountsRespository.RegisterTransferAsync(@event.Amount, fromAccount, toAccount, @event.EventId, trx);
 
-            await PostAccountDebitedEvent(@event.To, @event.Tenant);
-
             return EventProcessingStatus.Processed;
         }
-
-        /// <summary>
-        /// Posting event about chnage in the Amount of debited account so suspended events could be taken into consideration 
-        /// </summary>
-        /// <param name="account"></param>
-        /// <param name="tenant"></param>
-        /// <returns></returns>
-        private Task PostAccountDebitedEvent(string account, string tenant) => eventPublisher.PostAccountDebitedAsync(account, tenant);
     }
 }

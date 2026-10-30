@@ -24,7 +24,7 @@ namespace Boovatech.Eventing.Data
 
             var context = transaction.Context.AsDbContext();
             // Registration may have staged an insert that is not in the database yet.
-            var trackedEvent = await context.Events.SingleAsync(e => e.EventId == @event.EventId);
+            var trackedEvent = await context.Events.SingleAsync(e => e.EventId == @event.EventId && e.Tenant == @event.Tenant);
 
             var entry = context.Entry(trackedEvent);
 
@@ -41,7 +41,7 @@ namespace Boovatech.Eventing.Data
             var context = t.Context.AsDbContext();
             // Hold an exclusive table lock until the duplicate check and insert finish.
             var exists = await context.Events
-                .FromSqlInterpolated($"SELECT * FROM [Events] WITH (TABLOCKX, HOLDLOCK) WHERE [EventId] = {@event.EventId} AND Tenant = {@event.Tenant}")
+                .FromSqlInterpolated($"SELECT * FROM [Events] WITH (UPDLOCK, HOLDLOCK) WHERE [EventId] = {@event.EventId} AND Tenant = {@event.Tenant}")
                 .AsNoTracking()
                 .AnyAsync();
 
@@ -51,6 +51,7 @@ namespace Boovatech.Eventing.Data
             }
 
             context.Events.Add(@event);
+            await context.SaveChangesAsync();
 
             return true;
         }
@@ -69,7 +70,7 @@ namespace Boovatech.Eventing.Data
                         WHERE ei.Tenant = acc.Tenant
                           AND ei.[From] = acc.CodeName
                           AND ei.ProcessedAt IS NULL
-                          AND acc.Amount > ei.Amount
+                          AND acc.Amount >= ei.Amount
                         ORDER BY ei.OccuredAt ASC, ei.EventId ASC
                     ) e
                     """)
@@ -91,10 +92,10 @@ namespace Boovatech.Eventing.Data
                         WHERE ei.Tenant = acc.Tenant
                           AND ei.[From] = acc.CodeName
                           AND ei.ProcessedAt IS NULL
-                          AND acc.Amount > ei.Amount
+                          AND acc.Amount >= ei.Amount
                         ORDER BY ei.OccuredAt ASC, ei.EventId ASC
                     ) e
-                    WHERE acc.CodeName = ${account} AND acc.Tenant = {tenant}
+                    WHERE acc.CodeName = {account} AND acc.Tenant = {tenant}
                     """)
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
@@ -105,7 +106,7 @@ namespace Boovatech.Eventing.Data
             var context = trx.Context.AsDbContext();
 
             var @event = await context.Events
-                .FromSqlInterpolated($"SELECT * FROM [Events] WITH (ROWLOCK, HOLDLOCK) WHERE [EventId] = {eventId} AND Tenant = {tenant}")
+                .FromSqlInterpolated($"SELECT * FROM [Events] WITH (ROWLOCK, UPDLOCK, HOLDLOCK) WHERE [EventId] = {eventId} AND Tenant = {tenant}")
                 .AsNoTracking()
                 .FirstOrDefaultAsync();
 

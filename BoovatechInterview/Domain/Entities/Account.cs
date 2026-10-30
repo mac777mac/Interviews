@@ -1,7 +1,6 @@
-﻿using Boovatech.Domain;
-using Boovatech.Domain.Entities;
+﻿
 
-namespace Boovatech.Eventing.EventValidation
+namespace Boovatech.Domain.Entities
 {
     public class Account
     {

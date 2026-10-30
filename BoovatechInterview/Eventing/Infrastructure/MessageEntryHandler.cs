@@ -1,5 +1,7 @@
 ﻿using Boovatech.Domain;
+using Boovatech.Domain.Entities;
 using Boovatech.Domain.Events;
+using Boovatech.Domain.SuspendedEvents;
 using Boovatech.Eventing.EventValidation;
 using System.Text.Json;
 
@@ -11,24 +13,28 @@ namespace Boovatech.Eventing.Infrastructure
         private readonly IEventsRepository eventRespository;
         private readonly IDomainTransactionFactory transactionFactory;
         private readonly IDomainEventService domainEventService;
+        private readonly ISuspendedEventPublisher eventPublisher;
 
-        public MessageEntryHandler(IValidators eventValidator, IEventsRepository eventRespository, IDomainTransactionFactory transactionFactory, IDomainEventService domainEventService)
+        public MessageEntryHandler(IValidators eventValidator, IEventsRepository eventRespository, IDomainTransactionFactory transactionFactory, IDomainEventService domainEventService, ISuspendedEventPublisher eventPublisher)
         {
             this.eventValidator = eventValidator;
             this.eventRespository = eventRespository;
             this.transactionFactory = transactionFactory;
             this.domainEventService = domainEventService;
+            this.eventPublisher = eventPublisher;
         }
         public async Task ProcessAsync(MessageEntry entry, MessageEntryProcessingContext context, CancellationToken cancellation)
         {
             if (String.IsNullOrWhiteSpace(entry.PayloadJson))
             {
                 await context.RejectAsync("Empty message payload");
+                return;
             }
             var @event = await TryDeserializeAsync(entry.PayloadJson);
             if(@event == null)
             {
                 await context.RejectAsync("Cannot deserialize message payload");
+                return;
             }
 
              var validationResult = await PreValidateEventAsync(@event);
@@ -50,7 +56,11 @@ namespace Boovatech.Eventing.Infrastructure
                 var eventStatus = await domainEventService.HandleDomainEventAsync(@event, transaction);
                 await eventRespository.MarkEventAsAsync(@event, eventStatus, transaction);
 
-                transaction.Commit();
+                await transaction.CommitAsync();
+                if (eventStatus == EventProcessingStatus.Processed)
+                {
+                    await eventPublisher.PostAccountDebitedAsync(@event.To, @event.Tenant);
+                }
             }
         }
 
